@@ -3,9 +3,9 @@ const router = express.Router();
 const Document = require("../models/Document");
 const User = require("../models/User");
 const protect = require("../middleware/authMiddleware");
-const sendShareEmail = require('../utils/mailer'); // ✅ Correct function
+const sendShareEmail = require("../utils/mailer");
 
-// 👉 Create a new document (authenticated)
+// 👉 Create a new document
 router.post("/", protect, async (req, res) => {
   const { title } = req.body;
 
@@ -38,11 +38,10 @@ router.get("/", protect, async (req, res) => {
   }
 });
 
-// 👉 Get a single document (by ID) with access check
+// 👉 Get a single document (access check)
 router.get("/:id", protect, async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
-
     if (!doc) return res.status(404).json({ message: "Document not found" });
 
     const isOwner = doc.owner.toString() === req.user._id.toString();
@@ -58,10 +57,10 @@ router.get("/:id", protect, async (req, res) => {
   }
 });
 
-// 👉 Update a document (only if owner or collaborator)
+// 👉 Update a document (title or content)
 router.put("/:id", protect, async (req, res) => {
   try {
-    const { content } = req.body;
+    const { content, title } = req.body;
     const doc = await Document.findById(req.params.id);
 
     if (!doc) return res.status(404).json({ message: "Document not found" });
@@ -73,7 +72,9 @@ router.put("/:id", protect, async (req, res) => {
       return res.status(403).json({ message: "You don't have permission to edit this document" });
     }
 
-    doc.content = content;
+    if (typeof title !== 'undefined') doc.title = title;
+    if (typeof content !== 'undefined') doc.content = content;
+
     doc.updatedAt = new Date();
     await doc.save();
 
@@ -83,12 +84,10 @@ router.put("/:id", protect, async (req, res) => {
   }
 });
 
-// 👉 Share document with another user by email (adds as collaborator)
+// 👉 Share document with another user (add collaborator)
 router.post("/:id/share", protect, async (req, res) => {
   const { email } = req.body;
   const documentId = req.params.id;
-
-  console.log("📨 Share request for document ID:", documentId);
 
   try {
     const user = await User.findOne({ email });
@@ -112,7 +111,7 @@ router.post("/:id/share", protect, async (req, res) => {
   }
 });
 
-// 👉 Send document access link via email (uses nodemailer)
+// 👉 Send document link via email (using nodemailer)
 router.post("/:id/share-email", async (req, res) => {
   const { email } = req.body;
   const documentId = req.params.id;
@@ -121,11 +120,29 @@ router.post("/:id/share-email", async (req, res) => {
     const doc = await Document.findById(documentId);
     if (!doc) return res.status(404).json({ message: "Document not found" });
 
-    await sendShareEmail(email, documentId); // ✅ Dynamic sending
+    await sendShareEmail(email, documentId);
     res.json({ message: "Email sent successfully" });
   } catch (err) {
     console.error("❌ Failed to send email:", err.message);
     res.status(500).json({ message: "Failed to send email", error: err.message });
+  }
+});
+
+// 👉 Delete a document (only owner can delete)
+router.delete("/:id", protect, async (req, res) => {
+  try {
+    const doc = await Document.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+
+    if (!doc.owner.equals(req.user._id)) {
+      return res.status(403).json({ message: "You are not authorized to delete this document" });
+    }
+
+    await doc.deleteOne();
+    res.json({ message: "Document deleted successfully" });
+  } catch (err) {
+    console.error("❌ Failed to delete document:", err.message);
+    res.status(500).json({ message: "Failed to delete document", error: err.message });
   }
 });
 

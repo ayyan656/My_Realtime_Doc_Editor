@@ -18,7 +18,7 @@ const server = http.createServer(app);
 connectDb();
 
 // Test email on server start
-sendShareEmail('naveedayyan89@gmail.com', 'demoDocId12345');
+// sendShareEmail('naveedayyan89@gmail.com', 'demoDocId12345');
 // ✅ Middlewares
 app.use(express.json());
 app.use(cors({
